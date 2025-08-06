@@ -1,0 +1,249 @@
+$once$
+trunk = {["min_height"]=7, ["max_height"]=10, ["min_curve"]=5, ["max_curve"]=15, ["min_width"]=1, ["max_width"]=2,  ["min_count"]=1, ["max_count"]=1, ["generate_leaves"]=1, ["blocks"]={blocks.oak_log}}
+branches = {["min_count"]=3, ["max_count"]=5, ["min_length"]=2, ["max_length"]=4, ["min_curve"]=-5, ["max_curve"]=10, ["min_width"]=0, ["max_width"]=0, ["min_height"]=3, ["blocks"]={blocks.oak_log}}
+leaves = {["density"]=50, ["min_width"]=1, ["max_width"]=2, ["min_height"]=3, ["blocks"]={blocks.oak_leaves}}
+
+local trunk_blocks = {}
+local branches_start_blocks = {}
+local branches_blocks = {}
+local leaves_blocks = {}
+local trunk_leaves_blocks = {}
+local width_sphere = {}
+
+local function dsin(angle)
+    return math.sin(angle/180*math.pi)
+end
+
+local function dcos(angle)
+    return math.cos(angle/180*math.pi)
+end
+
+local function dtan(angle)
+    return dsin(angle)/dcos(angle)
+end
+
+local function ceil(num)
+    return math.ceil(num)
+end
+
+local function generate_trunk()
+    local trunk_count = math.random(trunk.min_count, trunk.max_count)
+    for j = 1, trunk_count do
+        local curr_x, curr_y, curr_z
+        local trunk_x, trunk_y, trunk_z
+    
+		if isSolid(getBlock(x,y,z)) then 
+			curr_x, curr_y, curr_z = x, y+1, z
+			trunk_x, trunk_y, trunk_z = x, y+1, z
+        else
+			curr_x, curr_y, curr_z = x, y, z
+			trunk_x, trunk_y, trunk_z = x, y, z
+		end
+
+
+        local curr_height = 1
+        local trunk_curve_angle = math.random(0, 360)
+        local trunk_height = math.random(trunk.min_height, trunk.max_height)
+        local trunk_curve = math.random(trunk.min_curve, trunk.max_curve)
+
+        local function one_block_generate()
+            local curr_width = (dtan(trunk_height-curr_height)/trunk_height*45) * (trunk.max_width - trunk.min_width) + trunk.min_width
+            setBlock(curr_x, curr_y, curr_z, trunk.blocks[math.random(1, #trunk.blocks)])
+            table.insert(trunk_blocks, {curr_x, curr_y, curr_z})
+            table.insert(branches_start_blocks, {curr_x, curr_y, curr_z, curr_height, trunk_height})
+
+            if curr_width <= 5 then
+                table.insert(trunk_leaves_blocks, {curr_x, curr_y, curr_z})
+            end
+            
+            -- width blocks
+            local n = 2
+            local tries = 0
+            local temp = math.floor(ceil((curr_width + 1)^0.5 + 0.0001) / 2)
+            while n <= curr_width + 1 and tries < 250 do
+                tries = tries + 1
+                local step = math.floor(ceil(n^0.5 + 0.0001) / 2) + math.floor(tries / 100)
+				if math.random(0, 10) <= 2 then step = step + 1 end
+                local xi, zi
+                
+                if math.random(0, 1) == 0 then
+                    xi = step * (math.random(0, 1) == 1 and -1 or 1)
+                    zi = math.random(-step, step)
+                else
+                    zi = step * (math.random(0, 1) == 1 and -1 or 1)
+                    xi = math.random(-step, step)
+                end
+                
+                if getBlock(curr_x + xi, curr_y, curr_z + zi) ~= blocks.air then
+                    goto continue
+                end
+                
+                table.insert(trunk_blocks, {curr_x + xi, curr_y, curr_z + zi})
+                setBlock(curr_x + xi, curr_y, curr_z + zi, trunk.blocks[math.random(1, #trunk.blocks)])
+                
+                if step >= temp then
+                    table.insert(trunk_leaves_blocks, {curr_x + xi, curr_y, curr_z + zi})
+                end
+                
+                n = n + 1
+                ::continue::
+            end
+        end
+
+        for i = 1, trunk_height do
+            one_block_generate()
+            curr_x = trunk_x + math.floor(curr_height * dsin(i/trunk_height * trunk_curve/2) * dcos(trunk_curve_angle))
+            curr_z = trunk_z + math.floor(curr_height * dsin(i/trunk_height * trunk_curve/2) * dsin(trunk_curve_angle))
+            curr_y = trunk_y + math.floor(curr_height * dcos(i/trunk_height * trunk_curve/2))
+			curr_height = curr_height + 1
+        end
+    end
+end
+
+local function generate_branches()
+    local branches_count = math.random(branches.min_count, branches.max_count)
+    local branches_start_count = {}
+    for i = 1, #branches_start_blocks do
+        branches_start_count[i] = 0
+    end
+  
+    for i = 1, branches_count do
+	local tt = math.random(branches.min_height, #branches_start_blocks)
+        branches_start_count[tt] = branches_start_count[tt] + 1
+    end
+
+    for i = 1, #branches_start_count do
+        while branches_start_count[i] >= 1 do
+            local curr_x, curr_y, curr_z = branches_start_blocks[i][1], branches_start_blocks[i][2], branches_start_blocks[i][3]
+            local trunk_x, trunk_y, trunk_z, curr_height, trunk_height = branches_start_blocks[i][1], branches_start_blocks[i][2], branches_start_blocks[i][3], branches_start_blocks[i][4], branches_start_blocks[i][5]
+ 			local branch_length = math.min(math.max((trunk_height-curr_height)/trunk_height + math.random(-0.1, 0.1) ,0), 1) * (branches.max_length - branches.min_length) + branches.min_length
+            local branch_curve_angle = math.random(0, 360)
+            local branch_curve = math.random(branches.min_curve, branches.max_curve)
+
+            local function one_block_generate(curr_length)
+                local curr_width = branches.min_width + dtan((branch_length - curr_length) / branch_length * 45) * (branches.max_width - branches.min_width)
+                
+                local is_in_trunk = false
+                for _, block in ipairs(trunk_blocks) do
+                    if block[1] == curr_x and block[2] == curr_y and block[3] == curr_z then
+                        is_in_trunk = true
+                        break
+                    end
+                end
+                
+                local is_in_branches = false
+                for _, block in ipairs(branches_blocks) do
+                    if block[1] == curr_x and block[2] == curr_y and block[3] == curr_z then
+                        is_in_branches = true
+                        break
+                    end
+                end
+                
+                if not is_in_trunk and not is_in_branches then
+                    setBlock(curr_x, curr_y, curr_z, branches.blocks[math.random(1, #branches.blocks)])
+                    table.insert(branches_blocks, {curr_x, curr_y, curr_z})
+                end
+
+                -- width blocks
+                local n = 2
+                local tries = 0
+                while n <= curr_width + 1 and tries < 250 do
+                    tries = tries + 1
+                    local step = math.floor(ceil(n^(1/3) + 0.001) / 2) + math.floor(tries / 100)
+                    local xi, yi, zi
+                    
+                    local num = math.random(0, 2)
+                    if num == 0 then
+                        xi = math.random(-step, step)
+                        yi = step * (math.random(0, 1) == 1 and -1 or 1)
+                        zi = math.random(-step, step)
+                    elseif num == 1 then
+                        xi = math.random(-step, step)
+                        yi = math.random(-step, step)
+                        zi = step * (math.random(0, 1) == 1 and -1 or 1)
+                    else
+                        xi = step * (math.random(0, 1) == 1 and -1 or 1)
+                        yi = math.random(-step, step)
+                        zi = math.random(-step, step)
+                    end
+                    
+                    if getBlock(curr_x + xi, curr_y + yi, curr_z + zi) ~= blocks.air then
+                        goto continue
+                    end
+                    
+                    table.insert(branches_blocks, {curr_x + xi, curr_y + yi, curr_z + zi})
+                    setBlock(curr_x + xi, curr_y + yi, curr_z + zi, branches.blocks[math.random(1, #branches.blocks)])
+                    
+                    n = n + 1
+                    ::continue::
+                end
+            end
+
+			local curr_length = 1
+            while curr_length <= branch_length do
+                one_block_generate(curr_length)
+                curr_x = trunk_x + math.floor(curr_length * dsin(curr_length/branch_length * branch_curve/2 + 90) * dcos(branch_curve_angle))
+                curr_z = trunk_z + math.floor(curr_length * dsin(curr_length/branch_length *branch_curve/2 + 90) * dsin(branch_curve_angle))
+                curr_y = trunk_y + math.floor(curr_length * dcos(curr_length/branch_length * branch_curve/2 + 90))
+				curr_length = curr_length + 1
+            end
+
+            branches_start_count[i] = branches_start_count[i] - 1
+        end
+    end
+end
+
+local function generate_leaves()
+    
+    if trunk.generate_leaves == 1 then
+        for _, block in ipairs(trunk_blocks) do
+            table.insert(branches_blocks, block)
+        end
+    end
+    
+    if #leaves.blocks == 1 and leaves.blocks[1] == blocks.air then
+        return
+    end
+       for _, i in ipairs(branches_blocks) do
+        local curr_x, curr_y, curr_z = i[1], i[2], i[3]
+        local width = math.random(leaves.min_width, leaves.max_width)
+        local fl = width_sphere[width] ~= nil
+        
+        if not fl then
+            local t = {}
+            for dx = -width, width do
+                for dy = -width, width do
+                    for dz = -width, width do
+                        if dx^2 + dy^2 + dz^2 <= width^2 then
+                            table.insert(t, {dx, dy, dz})
+                        end
+                    end
+                end
+            end
+            width_sphere[width] = t
+		end
+
+
+        for _, coord in ipairs(width_sphere[width]) do
+            local dx, dy, dz = coord[1], coord[2], coord[3]
+            local temp = {curr_x + dx, curr_y + dy, curr_z + dz}
+			local temp_str = tostring(curr_x + dx) .. tostring(curr_y + dy) .. tostring(curr_z + dz)
+            
+            local is_in_leaves = false
+            if leaves_blocks[temp_str] ~= nil then is_in_leaves = true end
+		            
+            if getBlock(curr_x + dx, curr_y + dy, curr_z + dz) == blocks.air and not is_in_leaves and curr_y + dy - y>= leaves.min_height then
+                leaves_blocks[temp_str] = true
+                if math.random(1, 100) <= leaves.density then
+                    setBlock(curr_x + dx, curr_y + dy, curr_z + dz, leaves.blocks[math.random(1, #leaves.blocks)])
+                end
+            end
+        end
+    end
+end
+
+generate_trunk()
+generate_branches()
+generate_leaves()
+
+return nil
