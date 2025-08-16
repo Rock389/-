@@ -36,6 +36,7 @@ local branches_blocks = {}
 local leaves_blocks = {}
 local trunk_leaves_blocks = {}
 local width_sphere = {}
+local width_circle = {}
 
 local function dsin(angle)
     return math.sin(angle/180*math.pi)
@@ -51,6 +52,13 @@ end
 
 local function ceil(num)
     return math.ceil(num)
+end
+
+local function shuffle(t)
+    for i = #t, 2, -1 do
+        local j = math.random(i)
+        t[i], t[j] = t[j], t[i]
+    end
 end
 
 local function generate_trunk()
@@ -84,36 +92,44 @@ local function generate_trunk()
             end
             
             -- width blocks
-            local n = 2
-            local tries = 0
-            local temp = math.floor(ceil((curr_width + 1)^0.5 + 0.0001) / 2)
-            while n <= curr_width + 1 and tries < 250 do
-                tries = tries + 1
-                local step = math.floor(ceil(n^0.5 + 0.0001) / 2) + math.floor(tries / 100)
-				if math.random(0, 10) <= 2 then step = step + 1 end
-                local xi, zi
-                
-                if math.random(0, 1) == 0 then
-                    xi = step * (math.random(0, 1) == 1 and -1 or 1)
-                    zi = math.random(-step, step)
-                else
-                    zi = step * (math.random(0, 1) == 1 and -1 or 1)
-                    xi = math.random(-step, step)
+            local n = 1
+			local r = 1
+            local temp_r, temp_n = 0, 0
+            while temp_n < curr_width do
+                if width_circle[temp_r] == nil then
+					width_circle[temp_r] = {}
+					for tx = -temp_r,temp_r do
+						for ty = -temp_r,temp_r do
+							if tx^2 + ty^2 <= temp_r^2 and  tx^2 + ty^2 > (temp_r-1)^2 then
+								table.insert(width_circle[temp_r], {tx, ty})
+							end
+						end
+				    end
+			    end
+			    temp_n = temp_n + #width_circle[temp_r]
+			    temp_r = temp_r + 1
+            end
+            
+            while n <= curr_width do
+                local circle = {}
+			    for k, v in pairs(width_circle[r]) do
+                    circle[k] = v
                 end
-                
-                if getBlock(curr_x + xi, curr_y, curr_z + zi) ~= blocks.air then
-                    goto continue
-                end
-                
-                table.insert(trunk_blocks, {curr_x + xi, curr_y, curr_z + zi})
-                setBlock(curr_x + xi, curr_y, curr_z + zi, trunk.blocks[math.random(1, #trunk.blocks)])
-                
-                if step >= temp then
-                    table.insert(trunk_leaves_blocks, {curr_x + xi, curr_y, curr_z + zi})
-                end
-                
-                n = n + 1
-                ::continue::
+				
+				shuffle(circle)
+				for ci=1,#circle do
+				   local xi, zi = circle[ci][1], circle[ci][2] 
+				    if not isSolid(getBlock(curr_x + xi, curr_y, curr_z + zi)) then
+                        setBlock(curr_x + xi, curr_y, curr_z + zi, trunk.blocks[math.random(1, #trunk.blocks)])
+                        table.insert(trunk_blocks, {curr_x + xi, curr_y, curr_z + zi})
+                        if temp_r - r <= 1 then
+                            table.insert(trunk_leaves_blocks, {curr_x + xi, curr_y, curr_z + zi})
+                        end
+					end
+                	n = n+1
+               	 	if n > curr_width then break end
+				end
+				r = r+1
             end
         end
 
@@ -222,18 +238,26 @@ end
 
 local function generate_leaves()
     
+    if (#leaves.blocks == 1 and leaves.blocks[1] == blocks.air) or leaves.density == 0 then
+        return
+    end
+    
     if trunk.generate_leaves == 1 then
-        for _, block in ipairs(trunk_blocks) do
+        for _, block in ipairs(trunk_leaves_blocks) do
             table.insert(branches_blocks, block)
         end
     end
     
-    if #leaves.blocks == 1 and leaves.blocks[1] == blocks.air then
-        return
+    local maxdist = 0
+    for _, i in ipairs(branches_blocks) do
+       local curr_x, curr_y, curr_z = i[1], i[2], i[3]
+       maxdist = math.max(maxdist, math.abs(curr_x-x) +math.abs(curr_y-y) + math.abs(curr_z-z))
     end
-       for _, i in ipairs(branches_blocks) do
+
+    for _, i in ipairs(branches_blocks) do
         local curr_x, curr_y, curr_z = i[1], i[2], i[3]
-        local width = math.random(leaves.min_width, leaves.max_width)
+        local dist = math.abs(curr_x-x) + math.abs(curr_y-y) + math.abs(curr_z-z)
+        local width = ceil((leaves.max_width-leaves.min_width)*(maxdist-dist)/maxdist) + leaves.min_width
         local fl = width_sphere[width] ~= nil
         
         if not fl then
