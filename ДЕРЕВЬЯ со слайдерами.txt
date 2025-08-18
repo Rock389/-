@@ -84,6 +84,7 @@ local function generate_trunk()
         local function one_block_generate()
             local curr_width = (dtan(trunk_height-curr_height)/trunk_height*45) * (trunk.max_width - trunk.min_width) + trunk.min_width
             setBlock(curr_x, curr_y, curr_z, trunk.blocks[math.random(1, #trunk.blocks)])
+			leaves_blocks[tostring(curr_x).." "..tostring(curr_y).." "..tostring(curr_z)] = true
             table.insert(trunk_blocks, {curr_x, curr_y, curr_z})
             table.insert(branches_start_blocks, {curr_x, curr_y, curr_z, curr_height, trunk_height})
 
@@ -121,6 +122,7 @@ local function generate_trunk()
 				   local xi, zi = circle[ci][1], circle[ci][2] 
 				    if not isSolid(getBlock(curr_x + xi, curr_y, curr_z + zi)) then
                         setBlock(curr_x + xi, curr_y, curr_z + zi, trunk.blocks[math.random(1, #trunk.blocks)])
+						leaves_blocks[tostring(curr_x + xi).." "..tostring(curr_y).." "..tostring(curr_z + zi)] = true
                         table.insert(trunk_blocks, {curr_x + xi, curr_y, curr_z + zi})
                         if temp_r - r <= 1 then
                             table.insert(trunk_leaves_blocks, {curr_x + xi, curr_y, curr_z + zi})
@@ -184,6 +186,7 @@ local function generate_branches()
                 
                 if not is_in_trunk and not is_in_branches then
                     setBlock(curr_x, curr_y, curr_z, branches.blocks[math.random(1, #branches.blocks)])
+					leaves_blocks[tostring(curr_x).." "..tostring(curr_y).." "..tostring(curr_z)] = true
                     table.insert(branches_blocks, {curr_x, curr_y, curr_z})
                 end
 
@@ -216,6 +219,7 @@ local function generate_branches()
                     
                     table.insert(branches_blocks, {curr_x + xi, curr_y + yi, curr_z + zi})
                     setBlock(curr_x + xi, curr_y + yi, curr_z + zi, branches.blocks[math.random(1, #branches.blocks)])
+					leaves_blocks[tostring(curr_x+xi).." "..tostring(curr_y).." "..tostring(curr_z+zi)] = true
                     
                     n = n + 1
                     ::continue::
@@ -278,7 +282,7 @@ local function generate_leaves()
         for _, coord in ipairs(width_sphere[width]) do
             local dx, dy, dz = coord[1], coord[2], coord[3]
             local temp = {curr_x + dx, curr_y + dy, curr_z + dz}
-			local temp_str = tostring(curr_x + dx) .. tostring(curr_y + dy) .. tostring(curr_z + dz)
+			local temp_str = tostring(curr_x + dx) .. " " .. tostring(curr_y + dy) .. " " .. tostring(curr_z + dz)
             
             local is_in_leaves = false
             if leaves_blocks[temp_str] ~= nil then is_in_leaves = true end
