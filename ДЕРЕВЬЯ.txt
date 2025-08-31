@@ -1,7 +1,36 @@
 $once$
-trunk = {["min_height"]=7, ["max_height"]=10, ["min_curve"]=5, ["max_curve"]=15, ["min_width"]=1, ["max_width"]=2,  ["min_count"]=1, ["max_count"]=1, ["generate_leaves"]=1, ["blocks"]={blocks.oak_log}}
-branches = {["min_count"]=3, ["max_count"]=5, ["min_length"]=2, ["max_length"]=4, ["min_curve"]=-5, ["max_curve"]=10, ["min_width"]=0, ["max_width"]=0, ["min_height"]=3, ["blocks"]={blocks.oak_log}}
-leaves = {["density"]=50, ["min_width"]=1, ["max_width"]=2, ["min_height"]=3, ["blocks"]={blocks.oak_leaves}}
+trunk = {["blocks"]={blocks.oak_log}}
+branches = {["blocks"]={blocks.oak_log}}
+leaves = {["blocks"]={blocks.oak_leaves}}
+
+trunk["min_height"] = $int(Trunk Min Height, 8, 5, 100)$
+trunk["max_height"] = $int(Trunk Max Height, 15, 3, 100)$
+trunk["min_curve"] = $int(Trunk Min Curve, 5, 0, 120)$
+trunk["max_curve"] = $int(Trunk Max Curve, 15, 0, 120)$
+trunk["min_width"] = $int(Trunk Min Width, 0, 0, 50)$
+trunk["max_width"] = $int(Trunk Max Width, 5, 0, 50)$
+trunk["min_count"] = $int(Trunk Min Count, 1, 1, 5)$
+trunk["max_count"] = $int(Trunk Max Count, 1, 1, 5)$
+trunk["generate_leaves"] = $int(Trunk Generate Leaves, 1, 0, 1)$
+
+
+branches["min_count"] = $int(Branches Min Count, 3, 0, 300)$
+branches["max_count"] = $int(Branches Max Count, 6, 0, 300)$
+branches["min_length"] = $int(Branches Min Length, 3, 2, 100)$
+branches["max_length"] = $int(Branches Max Length, 6, 2, 100)$
+branches["min_curve"] = $int(Branches Min Curve, 5, -120, 120)$
+branches["max_curve"] = $int(Branches Max Curve, 15, -120, 120)$
+branches["min_width"] = $int(Branches Min Width, 0, 0, 50)$
+branches["max_width"] = $int(Branches Max Width, 5, 0, 50)$
+branches["min_height"] = $int(Branches Min Height, 3, 0, 100)$
+
+
+leaves["density"] = $int(Leaves Density, 50, 0, 100)$
+leaves["min_width"] = $int(Leaves Min Width, 2, 1, 50)$
+leaves["max_width"] = $int(Leaves Max Width, 3, 1, 50)$
+leaves["min_height"] = $int(Leaves Min Height, 3, 0, 30)$
+leaves["algorithm"] = $int(Leaves Algorithm, 1, 1, 3)$
+leaves["quality"] = $int(Leaves Quality, 10, 1, 10)$
 
 local trunk_blocks = {}
 local branches_start_blocks = {}
@@ -23,7 +52,7 @@ local function dtan(angle)
     return dsin(angle)/dcos(angle)
 end
 
-local function ceil(num) 
+local function ceil(num)
     return math.ceil(num)
 end
 
@@ -32,6 +61,10 @@ local function shuffle(t)
         local j = math.random(i)
         t[i], t[j] = t[j], t[i]
     end
+end
+
+local function to_id(x, y, z)
+	return tostring(x) .. " " .. tostring(y) .. " " .. tostring(z)
 end
 
 local function generate_trunk()
@@ -251,22 +284,40 @@ local function generate_leaves()
             width_sphere[width] = t
 		end
 
-
         for _, coord in ipairs(width_sphere[width]) do
+			if _%10 > leaves["quality"] then goto continue end
             local dx, dy, dz = coord[1], coord[2], coord[3]
             local temp = {curr_x + dx, curr_y + dy, curr_z + dz}
-			local temp_str = tostring(curr_x + dx) .. " " .. tostring(curr_y + dy) .. " " .. tostring(curr_z + dz)
+			local temp_str = to_id(curr_x + dx, curr_y + dy, curr_z + dz)
+			local real_leaves_blocks = {}
             
             local is_in_leaves = false
             if leaves_blocks[temp_str] ~= nil then is_in_leaves = true end
 		            
             if getBlock(curr_x + dx, curr_y + dy, curr_z + dz) == blocks.air and not is_in_leaves and curr_y + dy - y>= leaves.min_height then
                 leaves_blocks[temp_str] = true
-                if math.random(1, 100) <= leaves.density then
-                    setBlock(curr_x + dx, curr_y + dy, curr_z + dz, leaves.blocks[math.random(1, #leaves.blocks)])
-                end
-            end
-        end
+				if leaves["algorithm"] == 1 then
+	                if math.random(1, 100) <= leaves.density then
+	                    setBlock(curr_x + dx, curr_y + dy, curr_z + dz, leaves.blocks[math.random(1, #leaves.blocks)])
+	                end
+				elseif leaves["algorithm"] == 2 then
+					local cb = 2
+					if math.abs(dx) + math.abs(dy) + math.abs(dz) <= 2 then cb = 1/5
+					elseif real_leaves_blocks[to_id(curr_x+dx+1,curr_y+dy,curr_z+dz)] or  real_leaves_blocks[to_id(curr_x+dx-1,curr_y+dy,curr_z+dz)] or  real_leaves_blocks[to_id(curr_x+dx,curr_y+dy+1,curr_z+dz)]
+						 or  real_leaves_blocks[to_id(curr_x+dx,curr_y+dy-1,curr_z+dz)]  or  real_leaves_blocks[to_id(curr_x+dx,curr_y+dy,curr_z+dz+1)] or  real_leaves_blocks[to_id(curr_x+dx,curr_y+dy,curr_z+dz-1)] then cb = 1/2.5 end
+	                if math.random(1, 100) <= (leaves.density/100)^cb*100  then
+						real_leaves_blocks[temp_str] = true
+	                    setBlock(curr_x + dx, curr_y + dy, curr_z + dz, leaves.blocks[math.random(1, #leaves.blocks)])
+					end
+				elseif leaves["algorithm"] == 3 then
+					if math.random(1, 100) <= (leaves.density/100) ^ (math.max(1, (dx^2 + dy^2 + dz^2)) / width^2 * (1 - leaves.density/100)) * 100  then
+						real_leaves_blocks[temp_str] = true
+	                    setBlock(curr_x + dx, curr_y + dy, curr_z + dz, leaves.blocks[math.random(1, #leaves.blocks)])
+					end
+				end
+	        end
+			::continue::
+		end
     end
 end
 
